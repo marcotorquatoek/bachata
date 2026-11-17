@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14111f">
+<title>Figure Bachata</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<style>
+:root{--bg:#14111f;--card:#1f1a30;--card2:#2a2340;--tx:#f3eefc;--mut:#9a90b8;--acc:#ff4d8d;--acc2:#7c5cff;--ok:#2ecc8f;--warn:#ffb347;--r:16px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif}
+body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(10px + env(safe-area-inset-top)) 14px 8px}
+h1{font-size:20px;margin:0 0 8px}
+input,select,textarea,button{font:inherit;color:var(--tx)}
+input,select,textarea{width:100%;background:var(--card);border:1px solid var(--card2);border-radius:12px;padding:12px;font-size:16px}
+textarea{min-height:70px;resize:vertical}
+label{display:block;font-size:12px;color:var(--mut);margin:10px 0 4px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 2px;scrollbar-width:none}
+.chip{flex:none;border:1px solid var(--card2);background:var(--card);padding:6px 12px;border-radius:99px;font-size:13px;color:var(--mut)}
+.chip.on{background:var(--acc2);color:#fff;border-color:var(--acc2)}
+main{padding:6px 14px}
+.card{background:var(--card);border-radius:var(--r);padding:12px;margin:10px 0}
+.card h3{margin:0 0 4px;font-size:17px}
+.meta{font-size:12px;color:var(--mut)}
+.tag{display:inline-block;font-size:12px;background:var(--card2);padding:3px 9px;border-radius:99px;margin:6px 4px 0 0}
+.tag.cat{background:#3a2a55;color:#d9c8ff}
+.st{display:inline-block;font-size:12px;padding:3px 9px;border-radius:99px;margin:6px 4px 0 0;font-weight:600}
+.st.s0{background:#4a3a1a;color:var(--warn)}.st.s1{background:#1e3a55;color:#6cb8ff}.st.s2{background:#173d2f;color:var(--ok)}
+.notes{font-size:14px;margin-top:8px;color:#d6cfe8;white-space:pre-wrap}
+.btn{border:0;border-radius:12px;padding:12px 16px;background:var(--card2);font-weight:600}
+.btn.p{background:linear-gradient(135deg,var(--acc),var(--acc2))}
+.btn.d{background:#4a1f2b;color:#ff8fa3}
+.btn.sm{padding:8px 12px;font-size:14px}
+.acts{display:flex;gap:8px;margin-top:10px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#1a1628;border-top:1px solid var(--card2);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+nav button{flex:1;background:none;border:0;padding:14px;color:var(--mut);font-weight:600}
+nav button.on{color:var(--acc)}
+.fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;border:0;font-size:32px;line-height:1;background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 6px 20px #0008;z-index:7}
+#sheet{position:fixed;inset:0;background:#000a;z-index:20;display:none;align-items:flex-end}
+#sheet.on{display:flex}
+.panel{background:var(--bg);width:100%;max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
+.panel h2{margin:0 0 6px;font-size:18px}
+iframe{width:100%;height:62vh;border:0;border-radius:12px;background:#000}
+.item{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:12px;padding:12px;margin:8px 0}
+.item .h{font-size:20px;color:var(--mut);cursor:grab;touch-action:none;padding:0 4px}
+.item .n{flex:1;font-size:15px}
+.empty{text-align:center;color:var(--mut);padding:40px 10px}
+.pick{padding:12px;background:var(--card);border-radius:12px;margin:6px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>💃 Figure</h1>
+  <input id="q" type="search" placeholder="Cerca nome, tag, note…" oninput="renderFig()">
+  <div class="chips" id="fstat"></div>
+  <div class="chips" id="fcat"></div>
+</header>
+<main id="view"></main>
+<button class="fab" onclick="quickAdd()" aria-label="Aggiungi rapido">+</button>
+<nav>
+  <button id="t1" class="on" onclick="go('fig')">Figure</button>
+  <button id="t2" onclick="go('seq')">Sequenze</button>
+</nav>
+<div id="sheet" onclick="if(event.target===this)closeSheet()"><div class="panel" id="panel"></div></div>
+
+<script>
+const SB_URL='https://zdwzombpaixkcryfpkxg.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpkd3pvbWJwYWl4a2NyeWZwa3hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MzczMTAsImV4cCI6MjA5NzMxMzMxMH0.ttAPvk-kV_BWC8RH43eVNXsN6HglLIQhp0rieWwjGPw';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+const STATUS=['Da provare','In corso','Studiata'];
+const BASE_CATS=['Sensual','Pasitos','Zouk','Dominicana'];
+let figs=[],seqs=[],items=[],tab='fig',curSeq=null,fStat='',fCat='',sortable=null,timer=null;
+const $=s=>document.querySelector(s);
+const esc=s=>(s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const fmt=d=>d?d.split('-').reverse().join('/'):'';
+const err=e=>{console.error(e);alert('Errore: '+(e.message||e))};
+
+async function load(){
+  const [a,b,c]=await Promise.all([
+    sb.from('figures').select('*').order('created_at',{ascending:false}),
+    sb.from('sequences').select('*').order('created_at',{ascending:false}),
+    sb.from('sequence_items').select('*').order('position')]);
+  if(a.error||b.error||c.error){err(a.error||b.error||c.error);return}
+  figs=a.data;seqs=b.data;items=c.data;render();
+}
+function go(t){tab=t;curSeq=null;render()}
+function render(){
+  $('#t1').classList.toggle('on',tab==='fig');$('#t2').classList.toggle('on',tab!=='fig');
+  const showF=tab==='fig';
+  document.querySelector('header').style.display=showF?'block':'none';
+  showF?renderFig():curSeq?renderSeqDetail():renderSeqList();
+}
+function allCats(){return [...new Set([...BASE_CATS,...figs.map(f=>f.category).filter(Boolean)])]}
+
+/* ---------- FIGURE ---------- */
+function renderFig(){
+  $('#fstat').innerHTML=['Tutte',...STATUS].map(s=>`<span class="chip ${(fStat||'Tutte')===s?'on':''}" onclick="fStat='${s==='Tutte'?'':s}';renderFig()">${s}</span>`).join('');
+  $('#fcat').innerHTML=['Tutte',...allCats()].map(s=>`<span class="chip ${(fCat||'Tutte')===s?'on':''}" onclick="fCat='${s==='Tutte'?'':esc(s)}';renderFig()">${esc(s)}</span>`).join('');
+  const q=$('#q').value.trim().toLowerCase();
+  const list=figs.filter(f=>(!fStat||f.status===fStat)&&(!fCat||f.category===fCat)&&(!q||[f.name,f.notes,f.category,...(f.tags||[])].join(' ').toLowerCase().includes(q)));
+  $('#view').innerHTML=list.length?list.map(cardHtml).join(''):'<div class="empty">Nessuna figura. Tocca + per aggiungerne una.</div>';
+}
+function cardHtml(f){
+  const si=Math.max(0,STATUS.indexOf(f.status));
+  return `<div class="card"><h3>${esc(f.name)}</h3>
+  <div class="meta">${fmt(f.created_on)}</div>
+  <div>${f.category?`<span class="tag cat">${esc(f.category)}</span>`:''}<span class="st s${si}" onclick="cycle('${f.id}')">${esc(f.status||STATUS[0])} ↻</span>
+  ${(f.tags||[]).map(t=>`<span class="tag" onclick="$('#q').value='${esc(t)}';renderFig()">#${esc(t)}</span>`).join('')}</div>
+  ${f.notes?`<div class="notes">${esc(f.notes)}</div>`:''}
+  <div class="acts">${f.url?`<button class="btn p sm" onclick="playOne('${f.id}')">▶ Video</button>`:''}<button class="btn sm" onclick="editFig('${f.id}')">Modifica</button></div></div>`;
+}
+async function cycle(id){
+  const f=figs.find(x=>x.id===id);const n=STATUS[(STATUS.indexOf(f.status)+1)%STATUS.length];
+  const {error}=await sb.from('figures').update({status:n}).eq('id',id);if(error)return err(error);f.status=n;renderFig();
+}
+function figForm(f){
+  f=f||{};
+  return `<h2>${f.id?'Modifica figura':'Nuova figura'}</h2>
+  <label>Nome</label><input id="fn" value="${esc(f.name)}" placeholder="CLOCK TURN">
+  <label>Link TikTok / Instagram</label><input id="fu" type="url" value="${esc(f.url)}" placeholder="https://…">
+  <div class="row"><div><label>Categoria</label><input id="fc" list="cats" value="${esc(f.category)}"><datalist id="cats">${allCats().map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
+  <div><label>Stato</label><select id="fs">${STATUS.map(s=>`<option ${s===(f.status||STATUS[0])?'selected':''}>${s}</option>`).join('')}</select></div></div>
+  <label>Tag (separati da virgola)</label><input id="ft" value="${esc((f.tags||[]).join(', '))}" placeholder="SPARK, base">
+  <label>Note</label><textarea id="fno" placeholder="Lezione SPARK 10/11/25">${esc(f.notes)}</textarea>
+  <div class="acts"><button class="btn p" style="flex:1" onclick="saveFig('${f.id||''}')">Salva</button>${f.id?`<button class="btn d" onclick="delFig('${f.id}')">Elimina</button>`:''}<button class="btn" onclick="closeSheet()">Chiudi</button></div>`;
+}
+function editFig(id){openSheet(figForm(figs.find(f=>f.id===id)))}
+async function saveFig(id){
+  const fu=await fixUrl($('#fu').value.trim());
+  const row={name:$('#fn').value.trim()||'Da nominare',url:fu||null,category:$('#fc').value.trim()||null,status:$('#fs').value,
+    tags:$('#ft').value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean),notes:$('#fno').value.trim()||null};
+  const r=id?await sb.from('figures').update(row).eq('id',id):await sb.from('figures').insert({...row,created_on:today()});
+  if(r.error)return err(r.error);closeSheet();load();
+}
+async function delFig(id){
+  if(!confirm('Eliminare la figura? Verrà tolta anche dalle sequenze.'))return;
+  const {error}=await sb.from('figures').delete().eq('id',id);if(error)return err(error);closeSheet();load();
+}
+function quickAdd(){
+  if(tab!=='fig'&&curSeq){addToSeq();return}
+  if(tab==='seq'){newSeq();return}
+  openSheet(`<h2>Salvataggio rapido</h2>
+  <label>Link</label><input id="qu" type="url" placeholder="Incolla link TikTok / IG" autofocus>
+  <label>Nota veloce (facoltativa)</label><input id="qn" placeholder="es. Lezione SPARK">
+  <div class="acts"><button class="btn p" style="flex:1" onclick="saveQuick()">Salva</button><button class="btn" onclick="closeSheet()">Chiudi</button></div>`);
+  setTimeout(()=>$('#qu')&&$('#qu').focus(),150);
+}
+async function saveQuick(){
+  let u=$('#qu').value.trim();if(!u)return alert('Inserisci un link');
+  u=await fixUrl(u);
+  const {error}=await sb.from('figures').insert({name:'Da nominare',url:u,notes:$('#qn').value.trim()||null,status:STATUS[0],tags:[],created_on:today()});
+  if(error)return err(error);closeSheet();tab='fig';load();
+}
+
+/* ---------- VIDEO ---------- */
+function embedUrl(u){
+  if(!u)return null;let m;
+  if(m=u.match(/instagram\.com\/(?:[\w.]+\/)?(reels?|p|tv)\/([\w-]+)/))return `https://www.instagram.com/${m[1]==='reels'?'reel':m[1]}/${m[2]}/embed`;
+  if(m=u.match(/tiktok\.com\/.*\/video\/(\d+)/))return `https://www.tiktok.com/embed/v2/${m[1]}`;
+  return null;
+}
+async function resolveTikTok(u){
+  const o='https://www.tiktok.com/oembed?url='+encodeURIComponent(u);
+  for(const t of [o,'https://corsproxy.io/?url='+encodeURIComponent(o)]){
+    try{
+      const j=await (await fetch(t)).json();
+      const id=j.embed_product_id||((j.html||'').match(/data-video-id="(\d+)"/)||[])[1];
+      if(id)return (j.author_url||'https://www.tiktok.com/@_')+'/video/'+id;
+    }catch(e){}
+  }
+  return null;
+}
+async function fixUrl(u,id){
+  if(!u||embedUrl(u)||!/tiktok\.com/.test(u))return u;
+  const r=await resolveTikTok(u);
+  if(r&&id){await sb.from('figures').update({url:r}).eq('id',id);const f=figs.find(x=>x.id===id);if(f)f.url=r}
+  return r||u;
+}
+function videoHtml(f){
+  const e=embedUrl(f.url);
+  return (e?`<iframe src="${esc(e)}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`:
+    `<div class="card empty">Impossibile incorporare questo link (i link brevi di TikTok tipo vm.tiktok.com non sono incorporabili: incolla il link completo con /video/…).</div>`)
+    +(f.url?`<div class="acts"><a class="btn sm" style="text-decoration:none;color:inherit" href="${esc(f.url)}" target="_blank" rel="noopener">Apri originale ↗</a></div>`:'');
+}
+async function playOne(id){
+  const f=figs.find(x=>x.id===id);
+  f.url=await fixUrl(f.url,id);
+  openSheet(`<h2>${esc(f.name)}</h2>${videoHtml(f)}<div class="acts"><button class="btn" style="flex:1" onclick="closeSheet()">Chiudi</button></div>`);
+}
+
+/* ---------- SEQUENZE ---------- */
+function renderSeqList(){
+  $('#view').innerHTML=`<h1 style="font-size:20px;margin:14px 0 4px">Sequenze</h1>`+(seqs.length?seqs.map(s=>{
+    const n=items.filter(i=>i.sequence_id===s.id).length;
+    return `<div class="card" onclick="curSeq='${s.id}';render()"><h3>${esc(s.name)}</h3><div class="meta">${n} figure · ${fmt(s.created_on)}</div></div>`}).join(''):'<div class="empty">Nessuna sequenza. Tocca + per crearne una.</div>');
+}
+function newSeq(){
+  openSheet(`<h2>Nuova sequenza</h2><label>Nome</label><input id="sn" placeholder="Sequenza sensual 1" autofocus>
+  <div class="acts"><button class="btn p" style="flex:1" onclick="saveSeq()">Crea</button><button class="btn" onclick="closeSheet()">Chiudi</button></div>`);
+}
+async function saveSeq(){
+  const name=$('#sn').value.trim();if(!name)return;
+  const {data,error}=await sb.from('sequences').insert({name,created_on:today()}).select().single();
+  if(error)return err(error);closeSheet();await load();curSeq=data.id;render();
+}
+function seqItems(){return items.filter(i=>i.sequence_id===curSeq).sort((a,b)=>a.position-b.position)}
+function renderSeqDetail(){
+  const s=seqs.find(x=>x.id===curSeq),its=seqItems();
+  $('#view').innerHTML=`<div class="acts" style="margin-top:12px"><button class="btn sm" onclick="go('seq')">← Indietro</button><button class="btn d sm" style="margin-left:auto" onclick="delSeq()">Elimina</button></div>
+  <h1 style="font-size:20px;margin:12px 0 4px">${esc(s.name)}</h1>
+  <div class="meta">Tieni premuto ☰ e trascina per riordinare. Il + aggiunge una figura.</div>
+  <div class="acts"><button class="btn p" style="flex:1" onclick="playSeq()" ${its.length?'':'disabled'}>▶ Play sequenza</button></div>
+  <div id="list">${its.length?its.map(i=>{const f=figs.find(x=>x.id===i.figure_id);return `<div class="item" data-id="${i.id}"><span class="h">☰</span><span class="n">${esc(f?f.name:'?')}</span><button class="btn d sm" onclick="rmItem('${i.id}')">✕</button></div>`}).join(''):'<div class="empty">Vuota. Aggiungi figure con +.</div>'}</div>`;
+  if(sortable)sortable.destroy();
+  sortable=new Sortable($('#list'),{handle:'.h',animation:150,onEnd:reorder});
+}
+async function reorder(){
+  const ids=[...document.querySelectorAll('#list .item')].map(e=>e.dataset.id);
+  const rows=ids.map((id,i)=>{const it=items.find(x=>x.id===id);it.position=i;return {id,sequence_id:it.sequence_id,figure_id:it.figure_id,position:i}});
+  const {error}=await sb.from('sequence_items').upsert(rows);if(error)err(error);
+}
+function addToSeq(){
+  openSheet(`<h2>Aggiungi figura</h2><input id="pq" type="search" placeholder="Cerca…" oninput="pickList()"><div id="pl"></div><div class="acts"><button class="btn" style="flex:1" onclick="closeSheet()">Chiudi</button></div>`);pickList();
+}
+function pickList(){
+  const q=$('#pq').value.toLowerCase();
+  $('#pl').innerHTML=figs.filter(f=>!q||[f.name,f.category,...(f.tags||[])].join(' ').toLowerCase().includes(q)).map(f=>`<div class="pick" onclick="pickFig('${f.id}')"><b>${esc(f.name)}</b> <span class="meta">${esc(f.category||'')}</span></div>`).join('');
+}
+async function pickFig(fid){
+  const pos=seqItems().length;
+  const {data,error}=await sb.from('sequence_items').insert({sequence_id:curSeq,figure_id:fid,position:pos}).select().single();
+  if(error)return err(error);items.push(data);renderSeqDetail();
+  const el=event.currentTarget;el.style.background='#173d2f';
+}
+async function rmItem(id){
+  const {error}=await sb.from('sequence_items').delete().eq('id',id);if(error)return err(error);
+  items=items.filter(i=>i.id!==id);renderSeqDetail();
+}
+async function delSeq(){
+  if(!confirm('Eliminare la sequenza?'))return;
+  const {error}=await sb.from('sequences').delete().eq('id',curSeq);if(error)return err(error);curSeq=null;load();
+}
+let P={list:[],i:0,auto:0};
+async function playSeq(){
+  const list=seqItems().map(i=>figs.find(f=>f.id===i.figure_id)).filter(Boolean);
+  for(const f of list)f.url=await fixUrl(f.url,f.id);
+  P={list,i:0,auto:0};drawPlayer();
+}
+function drawPlayer(){
+  clearTimeout(timer);const f=P.list[P.i];
+  openSheet(`<h2>${P.i+1}/${P.list.length} · ${esc(f.name)}</h2>${videoHtml(f)}
+  <div class="acts"><button class="btn" style="flex:1" onclick="step(-1)" ${P.i?'':'disabled'}>◀ Prec</button><button class="btn p" style="flex:1" onclick="step(1)" ${P.i<P.list.length-1?'':'disabled'}>Succ ▶</button></div>
+  <label>Avanzamento automatico</label><select onchange="P.auto=+this.value;drawPlayer()">${[[0,'Manuale'],[10,'Ogni 10 s'],[15,'Ogni 15 s'],[20,'Ogni 20 s'],[30,'Ogni 30 s']].map(a=>`<option value="${a[0]}" ${P.auto===a[0]?'selected':''}>${a[1]}</option>`).join('')}</select>
+  <div class="acts"><button class="btn" style="flex:1" onclick="closeSheet()">Chiudi</button></div>`);
+  if(P.auto&&P.i<P.list.length-1)timer=setTimeout(()=>step(1),P.auto*1000);
+}
+function step(d){P.i=Math.min(P.list.length-1,Math.max(0,P.i+d));drawPlayer()}
+
+/* ---------- SHEET ---------- */
+function openSheet(h){$('#panel').innerHTML=h;$('#sheet').classList.add('on')}
+function closeSheet(){clearTimeout(timer);$('#sheet').classList.remove('on');$('#panel').innerHTML=''}
+load();
+</script>
+</body>
+</html>
