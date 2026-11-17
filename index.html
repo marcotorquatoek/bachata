@@ -78,7 +78,7 @@ iframe{width:100%;height:62vh;border:0;border-radius:12px;background:#000}
 </head>
 <body>
 <header>
-  <h1>💃 Figure <small style="font-size:12px;color:var(--mut);font-weight:500">v1.3</small></h1>
+  <h1>💃 Figure <small style="font-size:12px;color:var(--mut);font-weight:500">v1.4</small></h1>
   <input id="q" type="search" placeholder="Cerca nome, tag, note…" oninput="renderFig()">
   <div class="chips" id="fstat"></div>
   <div class="chips" id="fcat"></div>
@@ -133,7 +133,7 @@ function renderFig(){
 }
 function cardHtml(f){
   const si=Math.max(0,STATUS.indexOf(f.status));
-  const src=igCode(f.url)?'<span class="src ig">IG</span>':/tiktok\.com/.test(f.url||'')?'<span class="src tt">TT</span>':'';
+  const src=igCode(f.url)?'<span class="src ig">IG</span>':/tiktok\.com/.test(f.url||'')?'<span class="src tt">TT</span>':isFile(f.url)?'<span class="src" style="background:#1f8f5f">MIO</span>':driveId(f.url)?'<span class="src" style="background:#1a73e8">DRIVE</span>':ytId(f.url)?'<span class="src" style="background:#e62117">YT</span>':'';
   return `<div class="card fc">${thumbHtml(f,60)}
   <div class="mid">${f.name?`<h3>${esc(f.name)}</h3>`:''}
   <div class="line">${src}<span class="st s${si}" onclick="cycle('${f.id}')">${esc(f.status||STATUS[0])}</span>${f.category?`<span class="tag cat">${esc(f.category)}</span>`:''}${(f.tags||[]).map(t=>`<span class="tag" onclick="$('#q').value='${esc(t)}';renderFig()">#${esc(t)}</span>`).join('')}<span class="meta">${fmt(f.created_on)}</span></div>
@@ -152,19 +152,22 @@ function figForm(f){
   f=f||{};
   return `<h2>${f.id?'Modifica figura':'Nuova figura'}</h2>
   <label>Nome</label><input id="fn" value="${esc(f.name)}" placeholder="CLOCK TURN">
-  <label>Link TikTok / Instagram</label><input id="fu" type="url" value="${esc(f.url)}" placeholder="https://…">
+  <label>Link (TikTok, Instagram, Drive, YouTube)</label><input id="fu" type="url" value="${esc(f.url)}" placeholder="https://…">
+  <label>Oppure carica un video tuo</label><input id="fv" type="file" accept="video/*">
   <div class="row"><div><label>Categoria</label><input id="fc" list="cats" value="${esc(f.category)}"><datalist id="cats">${allCats().map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
   <div><label>Stato</label><select id="fs">${STATUS.map(s=>`<option ${s===(f.status||STATUS[0])?'selected':''}>${s}</option>`).join('')}</select></div></div>
   <label>Tag (separati da virgola)</label><input id="ft" value="${esc((f.tags||[]).join(', '))}" placeholder="SPARK, base">
   <label>Note</label><textarea id="fno" placeholder="Lezione SPARK 10/11/25">${esc(f.notes)}</textarea>
   <label>Miniatura personalizzata (facoltativa, utile per Instagram)</label><input id="fth" type="file" accept="image/*" onchange="pickThumb(this)"><div id="thprev" style="margin-top:8px"></div>
-  <div class="acts"><button class="btn p" style="flex:1" onclick="saveFig('${f.id||''}')">Salva</button>${f.id?`<button class="btn d" onclick="delFig('${f.id}')">Elimina</button>`:''}<button class="btn" onclick="closeSheet()">Chiudi</button></div>`;
+  <div class="acts"><button class="btn p" id="fsave" style="flex:1" onclick="saveFig('${f.id||''}')">Salva</button>${f.id?`<button class="btn d" onclick="delFig('${f.id}')">Elimina</button>`:''}<button class="btn" onclick="closeSheet()">Chiudi</button></div>`;
 }
 function editFig(id){newThumb=undefined;openSheet(figForm(figs.find(f=>f.id===id)))}
 async function saveFig(id){
-  const fu=await fixUrl($('#fu').value.trim());
+  let fu=$('#fu').value.trim();const vf=$('#fv').files[0];let vth=null;
+  if(vf){const b=$('#fsave');if(b){b.textContent='Carico…';b.disabled=true}try{vth=await genThumb(vf);fu=await uploadVideo(vf)}catch(e){if(b){b.textContent='Salva';b.disabled=false}return err(e)}}else fu=await fixUrl(fu);
   const row={name:$('#fn').value.trim(),url:fu||null,category:$('#fc').value.trim()||null,status:$('#fs').value,
     tags:$('#ft').value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean),notes:$('#fno').value.trim()||null};
+  if(vth)row.thumb=vth;
   if(newThumb)row.thumb=newThumb;
   const r=id?await sb.from('figures').update(row).eq('id',id):await sb.from('figures').insert({...row,created_on:today()});
   if(r.error)return err(r.error);closeSheet();load();
@@ -178,15 +181,18 @@ function quickAdd(){
   if(tab==='seq'){newSeq();return}
   openSheet(`<h2>Salvataggio rapido</h2>
   <label>Link</label><input id="qu" type="url" placeholder="Incolla link TikTok / IG" autofocus>
+  <label>Oppure carica un video tuo</label><input id="qf" type="file" accept="video/*">
   <label>Nome (facoltativo)</label><input id="qnm" placeholder="es. Clock turn">
   <label>Nota veloce (facoltativa)</label><input id="qn" placeholder="es. Lezione SPARK">
-  <div class="acts"><button class="btn p" style="flex:1" onclick="saveQuick()">Salva</button><button class="btn" onclick="closeSheet()">Chiudi</button></div>`);
+  <div class="acts"><button class="btn p" id="qs" style="flex:1" onclick="saveQuick()">Salva</button><button class="btn" onclick="closeSheet()">Chiudi</button></div>`);
   setTimeout(()=>$('#qu')&&$('#qu').focus(),150);
 }
 async function saveQuick(){
-  let u=$('#qu').value.trim();if(!u)return alert('Inserisci un link');
-  u=await fixUrl(u);
-  const {error}=await sb.from('figures').insert({name:$('#qnm').value.trim(),url:u,notes:$('#qn').value.trim()||null,status:STATUS[0],tags:[],created_on:today()});
+  let u=$('#qu').value.trim();const file=$('#qf').files[0];let th=null;
+  if(!u&&!file)return alert('Inserisci un link o scegli un video');
+  if(file){$('#qs').textContent='Carico…';$('#qs').disabled=true;try{th=await genThumb(file);u=await uploadVideo(file)}catch(e){$('#qs').textContent='Salva';$('#qs').disabled=false;return err(e)}}
+  else u=await fixUrl(u);
+  const {error}=await sb.from('figures').insert({name:$('#qnm').value.trim(),url:u,thumb:th,notes:$('#qn').value.trim()||null,status:STATUS[0],tags:[],created_on:today()});
   if(error)return err(error);closeSheet();tab='fig';load();
 }
 
@@ -195,11 +201,34 @@ function embedUrl(u){
   if(!u)return null;let m;
   if(m=u.match(/instagram\.com\/(?:[\w.]+\/)?(reels?|p|tv)\/([\w-]+)/))return `https://www.instagram.com/${m[1]==='reels'?'reel':m[1]}/${m[2]}/embed`;
   if(m=u.match(/tiktok\.com\/.*\/video\/(\d+)/))return `https://www.tiktok.com/embed/v2/${m[1]}`;
+  if(m=driveId(u))return 'https://drive.google.com/file/d/'+m+'/preview';
+  if(m=ytId(u))return 'https://www.youtube.com/embed/'+m;
   return null;
+}
+const driveId=u=>((u||'').match(/drive\.google\.com\/file\/d\/([\w-]+)/)||[])[1];
+const ytId=u=>((u||'').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([\w-]{11})/)||[])[1];
+const isFile=u=>/\.(mp4|mov|m4v|webm)(\?|$)/i.test(u||'')||/\/storage\/v1\/object\/public\//.test(u||'');
+async function genThumb(file){
+  return new Promise(res=>{
+    const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='metadata';
+    const done=r=>{try{URL.revokeObjectURL(v.src)}catch(e){}res(r)};
+    setTimeout(()=>done(null),5000);
+    v.onloadedmetadata=()=>{v.currentTime=Math.min(0.5,(v.duration||1)/2)};
+    v.onseeked=()=>{try{const c=document.createElement('canvas');c.width=c.height=160;const x=c.getContext('2d');const m=Math.min(v.videoWidth,v.videoHeight);x.drawImage(v,(v.videoWidth-m)/2,(v.videoHeight-m)/2,m,m,0,0,160,160);done(c.toDataURL('image/jpeg',0.75))}catch(e){done(null)}};
+    v.onerror=()=>done(null);
+    v.src=URL.createObjectURL(file);
+  });
+}
+async function uploadVideo(file){
+  const ext=(file.name.split('.').pop()||'mp4').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const path=Date.now()+'_'+Math.random().toString(36).slice(2,8)+'.'+ext;
+  const {error}=await sb.storage.from('video').upload(path,file,{contentType:file.type||'video/mp4'});
+  if(error)throw error;
+  return sb.storage.from('video').getPublicUrl(path).data.publicUrl;
 }
 let newThumb;
 const igCode=u=>((u||'').match(/instagram\.com\/(?:[\w.]+\/)?(?:reels?|p|tv)\/([\w-]+)/)||[])[1];
-function thumbSrc(f){if(f.thumb)return f.thumb;const c=igCode(f.url);return c?`https://www.instagram.com/p/${c}/media/?size=m`:''}
+function thumbSrc(f){if(f.thumb)return f.thumb;const c=igCode(f.url);if(c)return `https://www.instagram.com/p/${c}/media/?size=m`;const d=driveId(f.url);if(d)return 'https://drive.google.com/thumbnail?id='+d+'&sz=w200';const y=ytId(f.url);if(y)return 'https://img.youtube.com/vi/'+y+'/mqdefault.jpg';return ''}
 function thumbHtml(f,s){
   const src=thumbSrc(f);
   return `<div class="thw ${igCode(f.url)?'pig':'ptt'}" data-th="${f.id}" style="width:${s}px;height:${s}px;cursor:pointer" ${f.url?`onclick="playOne('${f.id}')"`:''}>${src?`<img src="${esc(src)}" referrerpolicy="no-referrer" loading="lazy" onerror="thumbErr(this,'${f.id}')">`:'▶'}</div>`;
@@ -263,7 +292,9 @@ async function fixUrl(u,id){
   if(r&&id){await sb.from('figures').update({url:r}).eq('id',id);const f=figs.find(x=>x.id===id);if(f)f.url=r}
   return r||u;
 }
-function videoHtml(f){
+function videoHtml(f,seq){
+  if(f.isText)return `<div class="card" style="font-size:20px;line-height:1.45;white-space:pre-wrap">${esc(f.notes)}</div>`;
+  if(isFile(f.url))return `<video src="${esc(f.url)}" controls playsinline ${seq?'autoplay onended="if(P.i<P.list.length-1)step(1)"':''} style="width:100%;max-height:62vh;border-radius:12px;background:#000"></video>`;
   if(igCode(f.url))return `<a class="btn p" style="display:block;text-align:center;text-decoration:none;color:#fff" href="${esc(f.url)}" target="_blank" rel="noopener">Apri su Instagram ↗</a>`;
   const e=embedUrl(f.url);
   return (e?`<iframe src="${esc(e)}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`:
@@ -299,17 +330,17 @@ function renderSeqDetail(){
   <h1 style="font-size:20px;margin:12px 0 4px">${esc(s.name)}</h1>
   <div class="meta">Tieni premuto ☰ e trascina per riordinare. Il + aggiunge una figura.</div>
   <div class="acts"><button class="btn p" style="flex:1" onclick="playSeq()" ${its.length?'':'disabled'}>▶ Play sequenza</button></div>
-  <div id="list">${its.length?its.map(i=>{const f=figs.find(x=>x.id===i.figure_id);return `<div class="item" data-id="${i.id}"><span class="h">☰</span>${f?thumbHtml(f,40):''}<span class="n">${esc(f?nm(f):'?')}</span><button class="btn d sm" onclick="rmItem('${i.id}')">✕</button></div>`}).join(''):'<div class="empty">Vuota. Aggiungi figure con +.</div>'}</div>`;
+  <div id="list">${its.length?its.map(i=>{const f=figs.find(x=>x.id===i.figure_id);return `<div class="item" data-id="${i.id}"><span class="h">☰</span>${i.text?'<span style="font-size:20px">📝</span>':(f?thumbHtml(f,40):'')}<span class="n" ${i.text?`onclick="editText('${i.id}')"`:''}>${esc(i.text||(f?nm(f):'?'))}</span><button class="btn d sm" onclick="rmItem('${i.id}')">✕</button></div>`}).join(''):'<div class="empty">Vuota. Aggiungi figure con +.</div>'}</div>`;
   if(sortable)sortable.destroy();
   sortable=new Sortable($('#list'),{handle:'.h',animation:150,onEnd:reorder});
 }
 async function reorder(){
   const ids=[...document.querySelectorAll('#list .item')].map(e=>e.dataset.id);
-  const rows=ids.map((id,i)=>{const it=items.find(x=>x.id===id);it.position=i;return {id,sequence_id:it.sequence_id,figure_id:it.figure_id,position:i}});
+  const rows=ids.map((id,i)=>{const it=items.find(x=>x.id===id);it.position=i;return {id,sequence_id:it.sequence_id,figure_id:it.figure_id,text:it.text||null,position:i}});
   const {error}=await sb.from('sequence_items').upsert(rows);if(error)err(error);
 }
 function addToSeq(){
-  openSheet(`<h2>Aggiungi figura</h2><input id="pq" type="search" placeholder="Cerca…" oninput="pickList()"><div id="pl"></div><div class="acts"><button class="btn" style="flex:1" onclick="closeSheet()">Chiudi</button></div>`);pickList();
+  openSheet(`<h2>Aggiungi alla sequenza</h2><label>Riga scritta (senza video)</label><textarea id="tx" placeholder="es. Base, poi giro a destra e uscita"></textarea><div class="acts"><button class="btn p sm" onclick="addText()">+ Aggiungi riga</button></div><label>Oppure scegli una figura</label><input id="pq" type="search" placeholder="Cerca…" oninput="pickList()"><div id="pl"></div><div class="acts"><button class="btn" style="flex:1" onclick="closeSheet()">Chiudi</button></div>`);pickList();
 }
 function pickList(){
   const q=$('#pq').value.toLowerCase();
@@ -321,6 +352,16 @@ async function pickFig(fid){
   if(error)return err(error);items.push(data);renderSeqDetail();
   const el=event.currentTarget;el.style.background='#173d2f';
 }
+async function addText(){
+  const t=$('#tx').value.trim();if(!t)return;
+  const {data,error}=await sb.from('sequence_items').insert({sequence_id:curSeq,figure_id:null,text:t,position:seqItems().length}).select().single();
+  if(error)return err(error);items.push(data);$('#tx').value='';renderSeqDetail();
+}
+async function editText(id){
+  const it=items.find(x=>x.id===id);const t=prompt('Modifica riga',it.text);if(t===null)return;
+  const v=t.trim();if(!v)return;
+  const {error}=await sb.from('sequence_items').update({text:v}).eq('id',id);if(error)return err(error);it.text=v;renderSeqDetail();
+}
 async function rmItem(id){
   const {error}=await sb.from('sequence_items').delete().eq('id',id);if(error)return err(error);
   items=items.filter(i=>i.id!==id);renderSeqDetail();
@@ -331,13 +372,13 @@ async function delSeq(){
 }
 let P={list:[],i:0,auto:0};
 async function playSeq(){
-  const list=seqItems().map(i=>figs.find(f=>f.id===i.figure_id)).filter(Boolean);
+  const list=seqItems().map(i=>i.text?{isText:1,name:'',notes:i.text}:figs.find(f=>f.id===i.figure_id)).filter(Boolean);
   for(const f of list)f.url=await fixUrl(f.url,f.id);
   P={list,i:0,auto:0};drawPlayer();
 }
 function drawPlayer(){
   clearTimeout(timer);const f=P.list[P.i];
-  openSheet(`<h2>${P.i+1}/${P.list.length} · ${esc(nm(f))}</h2>${videoHtml(f)}
+  openSheet(`<h2>${P.i+1}/${P.list.length} · ${f.isText?'Passo scritto':esc(nm(f))}</h2>${videoHtml(f,true)}
   <div class="acts"><button class="btn" style="flex:1" onclick="step(-1)" ${P.i?'':'disabled'}>◀ Prec</button><button class="btn p" style="flex:1" onclick="step(1)" ${P.i<P.list.length-1?'':'disabled'}>Succ ▶</button></div>
   <label>Avanzamento automatico</label><select onchange="P.auto=+this.value;drawPlayer()">${[[0,'Manuale'],[10,'Ogni 10 s'],[15,'Ogni 15 s'],[20,'Ogni 20 s'],[30,'Ogni 30 s']].map(a=>`<option value="${a[0]}" ${P.auto===a[0]?'selected':''}>${a[1]}</option>`).join('')}</select>
   <div class="acts"><button class="btn" style="flex:1" onclick="closeSheet()">Chiudi</button></div>`);
