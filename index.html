@@ -59,11 +59,23 @@ iframe{width:100%;height:62vh;border:0;border-radius:12px;background:#000}
 .top{display:flex;gap:12px;align-items:center}
 .thw{flex:none;border-radius:12px;overflow:hidden;background:var(--card2);display:flex;align-items:center;justify-content:center;color:var(--mut)}
 .thw img{width:100%;height:100%;object-fit:cover}
+.fc{display:flex;gap:10px;align-items:center;padding:8px 10px;margin:6px 0}
+.mid{flex:1;min-width:0}
+.fc h3{margin:0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.line{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px}
+.line .st,.line .tag{margin:0;padding:2px 8px;font-size:11px}
+.fc .notes{font-size:12px;margin-top:4px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.side{display:flex;flex-direction:column;gap:6px}
+.ib{width:38px;height:38px;border:0;border-radius:10px;background:var(--card2);font-size:16px;padding:0}
+.ib.p{background:linear-gradient(135deg,var(--acc),var(--acc2))}
+.src{font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;color:#fff;letter-spacing:.3px}
+.src.ig{background:linear-gradient(135deg,#f09433,#dc2743,#bc1888)}
+.src.tt{background:#000;box-shadow:inset -1px -1px 0 #ff0050,inset 1px 1px 0 #00f2ea}
 </style>
 </head>
 <body>
 <header>
-  <h1>💃 Figure</h1>
+  <h1>💃 Figure <small style="font-size:12px;color:var(--mut);font-weight:500">v1.1</small></h1>
   <input id="q" type="search" placeholder="Cerca nome, tag, note…" oninput="renderFig()">
   <div class="chips" id="fstat"></div>
   <div class="chips" id="fcat"></div>
@@ -117,11 +129,12 @@ function renderFig(){
 }
 function cardHtml(f){
   const si=Math.max(0,STATUS.indexOf(f.status));
-  return `<div class="card"><div class="top">${thumbHtml(f,64)}<div><h3>${esc(f.name)}</h3><div class="meta">${fmt(f.created_on)}</div></div></div>
-  <div>${f.category?`<span class="tag cat">${esc(f.category)}</span>`:''}<span class="st s${si}" onclick="cycle('${f.id}')">${esc(f.status||STATUS[0])} ↻</span>
-  ${(f.tags||[]).map(t=>`<span class="tag" onclick="$('#q').value='${esc(t)}';renderFig()">#${esc(t)}</span>`).join('')}</div>
-  ${f.notes?`<div class="notes">${esc(f.notes)}</div>`:''}
-  <div class="acts">${f.url?`<button class="btn p sm" onclick="playOne('${f.id}')">▶ Video</button>`:''}<button class="btn sm" onclick="editFig('${f.id}')">Modifica</button></div></div>`;
+  const src=igCode(f.url)?'<span class="src ig">IG</span>':/tiktok\.com/.test(f.url||'')?'<span class="src tt">TT</span>':'';
+  return `<div class="card fc">${thumbHtml(f,60)}
+  <div class="mid"><h3>${esc(f.name)}</h3>
+  <div class="line">${src}<span class="st s${si}" onclick="cycle('${f.id}')">${esc(f.status||STATUS[0])}</span>${f.category?`<span class="tag cat">${esc(f.category)}</span>`:''}${(f.tags||[]).map(t=>`<span class="tag" onclick="$('#q').value='${esc(t)}';renderFig()">#${esc(t)}</span>`).join('')}<span class="meta">${fmt(f.created_on)}</span></div>
+  ${f.notes?`<div class="notes">${esc(f.notes)}</div>`:''}</div>
+  <div class="side">${f.url?`<button class="ib p" onclick="playOne('${f.id}')">▶</button>`:''}<button class="ib" onclick="editFig('${f.id}')">✎</button></div></div>`;
 }
 async function cycle(id){
   const f=figs.find(x=>x.id===id);const n=STATUS[(STATUS.indexOf(f.status)+1)%STATUS.length];
@@ -157,6 +170,7 @@ function quickAdd(){
   if(tab==='seq'){newSeq();return}
   openSheet(`<h2>Salvataggio rapido</h2>
   <label>Link</label><input id="qu" type="url" placeholder="Incolla link TikTok / IG" autofocus>
+  <label>Nome (facoltativo)</label><input id="qnm" placeholder="es. Clock turn">
   <label>Nota veloce (facoltativa)</label><input id="qn" placeholder="es. Lezione SPARK">
   <div class="acts"><button class="btn p" style="flex:1" onclick="saveQuick()">Salva</button><button class="btn" onclick="closeSheet()">Chiudi</button></div>`);
   setTimeout(()=>$('#qu')&&$('#qu').focus(),150);
@@ -164,7 +178,7 @@ function quickAdd(){
 async function saveQuick(){
   let u=$('#qu').value.trim();if(!u)return alert('Inserisci un link');
   u=await fixUrl(u);
-  const {error}=await sb.from('figures').insert({name:'Da nominare',url:u,notes:$('#qn').value.trim()||null,status:STATUS[0],tags:[],created_on:today()});
+  const {error}=await sb.from('figures').insert({name:$('#qnm').value.trim()||'Da nominare',url:u,notes:$('#qn').value.trim()||null,status:STATUS[0],tags:[],created_on:today()});
   if(error)return err(error);closeSheet();tab='fig';load();
 }
 
@@ -183,19 +197,30 @@ function thumbHtml(f,s){
   return `<div class="thw" data-th="${f.id}" style="width:${s}px;height:${s}px;cursor:pointer" ${f.url?`onclick="playOne('${f.id}')"`:''}>${src?`<img src="${esc(src)}" referrerpolicy="no-referrer" loading="lazy" onerror="thumbErr(this,'${f.id}')">`:'▶'}</div>`;
 }
 function setThumb(id,src){const w=document.querySelector(`[data-th="${id}"]`);if(w)w.innerHTML=src?`<img src="${esc(src)}" referrerpolicy="no-referrer" onerror="thumbErr(this,'${id}')">`:'▶'}
-async function getTikTokThumb(u){
+async function getTikTokInfo(u){
   const o='https://www.tiktok.com/oembed?url='+encodeURIComponent(u);
   for(const t of [o,'https://corsproxy.io/?url='+encodeURIComponent(o)]){
-    try{const j=await (await fetch(t)).json();if(j.thumbnail_url)return j.thumbnail_url}catch(e){}
+    try{const j=await (await fetch(t)).json();if(j.thumbnail_url||j.title)return j}catch(e){}
   }
   return null;
 }
 async function fetchThumb(f){
   if(f._t||!/tiktok\.com/.test(f.url||''))return;f._t=1;
-  const t=await getTikTokThumb(f.url);if(!t)return;
-  f.thumb=t;await sb.from('figures').update({thumb:t}).eq('id',f.id);setThumb(f.id,t);
+  const j=await getTikTokInfo(f.url);if(!j)return;
+  const upd={};
+  if(!f.thumb&&j.thumbnail_url)upd.thumb=j.thumbnail_url;
+  if(f.name==='Da nominare'){
+    let n=(j.title||'').replace(/#\S+/g,'').replace(/\s+/g,' ').trim();
+    if(!n&&j.author_name)n='TikTok '+j.author_name;
+    if(n)upd.name=n.slice(0,60);
+  }
+  if(!Object.keys(upd).length)return;
+  Object.assign(f,upd);
+  await sb.from('figures').update(upd).eq('id',f.id);
+  if(upd.thumb)setThumb(f.id,upd.thumb);
+  if(upd.name&&tab==='fig')renderFig();
 }
-function ensureThumbs(){figs.filter(f=>!f.thumb).forEach(fetchThumb)}
+function ensureThumbs(){figs.filter(f=>!f.thumb||f.name==='Da nominare').forEach(fetchThumb)}
 async function thumbErr(img,id){
   const f=figs.find(x=>x.id===id);
   if(f&&f.thumb&&/^http/.test(f.thumb)&&!f._r){f._r=1;f._t=0;f.thumb=null;await fetchThumb(f);return}
