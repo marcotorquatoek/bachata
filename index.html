@@ -79,11 +79,13 @@ iframe{width:100%;height:62vh;border:0;border-radius:12px;background:#000}
 .sw input::-webkit-search-cancel-button{-webkit-appearance:none}
 .sw button{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:0;border-radius:50%;background:var(--card2);font-size:14px;padding:0;color:var(--mut)}
 .sw.has button{display:block}
+.sticky{position:sticky;top:-16px;margin:-16px -16px 8px;padding:12px 16px;background:var(--bg);display:flex;justify-content:space-between;align-items:center;z-index:2;border-bottom:1px solid var(--card2)}
+.sticky b{font-size:18px}
 </style>
 </head>
 <body>
 <header>
-  <h1>💃 Figure <small style="font-size:12px;color:var(--mut);font-weight:500">v1.5</small></h1>
+  <h1>💃 Figure <small style="font-size:12px;color:var(--mut);font-weight:500">v1.6</small></h1>
   <div class="sw"><input id="q" type="search" placeholder="Cerca nome, tag, note…" oninput="renderFig()"><button type="button" onclick="clearQ()" aria-label="Svuota ricerca">✕</button></div>
   <div class="chips" id="fstat"></div>
   <div class="chips" id="fcat"></div>
@@ -337,7 +339,7 @@ function renderSeqDetail(){
   <h1 style="font-size:20px;margin:12px 0 4px">${esc(s.name)}</h1>
   <div class="meta">Tieni premuto ☰ e trascina per riordinare. Il + aggiunge una figura.</div>
   <div class="acts"><button class="btn p" style="flex:1" onclick="playSeq()" ${its.length?'':'disabled'}>▶ Play sequenza</button></div>
-  <div id="list">${its.length?its.map(i=>{const f=figs.find(x=>x.id===i.figure_id);return `<div class="item" data-id="${i.id}"><span class="h">☰</span>${i.text?'<span style="font-size:20px">📝</span>':(f?thumbHtml(f,40):'')}<span class="n" ${i.text?`onclick="editText('${i.id}')"`:''}>${esc(i.text||(f?nm(f):'?'))}</span><button class="btn d sm" onclick="rmItem('${i.id}')">✕</button></div>`}).join(''):'<div class="empty">Vuota. Aggiungi figure con +.</div>'}</div>`;
+  <div id="list">${its.length?its.map(i=>{const f=figs.find(x=>x.id===i.figure_id);return `<div class="item" data-id="${i.id}"><span class="h">☰</span>${i.text?'<span style="font-size:20px">📝</span>':(f?thumbHtml(f,40):'')}<span class="n" style="cursor:pointer" ${i.text?`onclick="editText('${i.id}')"`:(f?`onclick="playOne('${f.id}')"`:'')}>${esc(i.text||(f?nm(f):'?'))}</span><button class="btn d sm" onclick="rmItem('${i.id}')">✕</button></div>`}).join(''):'<div class="empty">Vuota. Aggiungi figure con +.</div>'}</div>`;
   if(sortable)sortable.destroy();
   sortable=new Sortable($('#list'),{handle:'.h',animation:150,onEnd:reorder});
 }
@@ -347,17 +349,17 @@ async function reorder(){
   const {error}=await sb.from('sequence_items').upsert(rows);if(error)err(error);
 }
 function addToSeq(){
-  openSheet(`<h2>Aggiungi alla sequenza</h2><label>Riga scritta (senza video)</label><textarea id="tx" placeholder="es. Base, poi giro a destra e uscita"></textarea><div class="acts"><button class="btn p sm" onclick="addText()">+ Aggiungi riga</button></div><label>Oppure scegli una figura</label><input id="pq" type="search" placeholder="Cerca…" oninput="pickList()"><div id="pl"></div><div class="acts"><button class="btn" style="flex:1" onclick="closeSheet()">Chiudi</button></div>`);pickList();
+  openSheet(`<div class="sticky"><b>Aggiungi alla sequenza</b><button class="btn p sm" onclick="closeSheet()">Fatto ✓</button></div><label>Riga scritta (senza video)</label><textarea id="tx" placeholder="es. Base, poi giro a destra e uscita"></textarea><div class="acts"><button class="btn p sm" onclick="addText()">+ Aggiungi riga</button></div><label>Oppure scegli una figura</label><input id="pq" type="search" placeholder="Cerca…" oninput="pickList()"><div id="pl"></div><div class="acts"><button class="btn" style="flex:1" onclick="closeSheet()">Chiudi</button></div>`);pickList();
 }
 function pickList(){
   const q=$('#pq').value.toLowerCase();
-  $('#pl').innerHTML=figs.filter(f=>!q||[f.name,f.category,...(f.tags||[])].join(' ').toLowerCase().includes(q)).map(f=>`<div class="pick" onclick="pickFig('${f.id}')"><b>${esc(nm(f))}</b> <span class="meta">${esc(f.category||'')}</span></div>`).join('');
+  $('#pl').innerHTML=figs.filter(f=>!q||[f.name,f.category,...(f.tags||[])].join(' ').toLowerCase().includes(q)).map(f=>`<div class="pick" onclick="pickFig('${f.id}',this)"><b>${esc(nm(f))}</b> <span class="meta">${esc(f.category||'')}</span></div>`).join('');
 }
-async function pickFig(fid){
+async function pickFig(fid,el){
   const pos=seqItems().length;
   const {data,error}=await sb.from('sequence_items').insert({sequence_id:curSeq,figure_id:fid,position:pos}).select().single();
   if(error)return err(error);items.push(data);renderSeqDetail();
-  const el=event.currentTarget;el.style.background='#173d2f';
+  el.style.background='#173d2f';el.innerHTML+=' ✓ aggiunta';
 }
 async function addText(){
   const t=$('#tx').value.trim();if(!t)return;
